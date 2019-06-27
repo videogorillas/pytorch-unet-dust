@@ -136,7 +136,7 @@ def save_image(image_numpy, image_path):
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
-model = UNet(in_channels=3, wf=4, depth=3, n_classes=1, padding=True, up_mode='upconv').to(device)
+model = UNet(in_channels=3, wf=4, depth=4, n_classes=1, padding=True, up_mode='upconv', batch_norm=True).to(device)
 print(model)
 summary(model, input_size=(3, _W, _H))
 
@@ -146,7 +146,7 @@ filmdust = FilmDust128Dataset("/home/zhukov/tmp/ok/256")
 print(len(filmdust))
 dataloader = torch.utils.data.DataLoader(
     filmdust,
-    batch_size=64,
+    batch_size=48,
     shuffle=True,
     num_workers=8)
 
