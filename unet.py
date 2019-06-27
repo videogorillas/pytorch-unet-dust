@@ -7,14 +7,14 @@ import torch.nn.functional as F
 
 class UNet(nn.Module):
     def __init__(
-        self,
-        in_channels=1,
-        n_classes=2,
-        depth=5,
-        wf=6,
-        padding=False,
-        batch_norm=False,
-        up_mode='upconv',
+            self,
+            in_channels=1,
+            n_classes=2,
+            depth=5,
+            wf=6,
+            padding=False,
+            batch_norm=False,
+            up_mode='upconv',
     ):
         """
         Implementation of
@@ -59,6 +59,7 @@ class UNet(nn.Module):
             )
             prev_channels = 2 ** (wf + i)
 
+        self.sigmoid = nn.Sigmoid()
         self.last = nn.Conv2d(prev_channels, n_classes, kernel_size=1)
 
     def forward(self, x):
@@ -72,7 +73,7 @@ class UNet(nn.Module):
         for i, up in enumerate(self.up_path):
             x = up(x, blocks[-i - 1])
 
-        return self.last(x)
+        return self.sigmoid(self.last(x))
 
 
 class UNetConvBlock(nn.Module):
@@ -80,12 +81,14 @@ class UNetConvBlock(nn.Module):
         super(UNetConvBlock, self).__init__()
         block = []
 
-        block.append(nn.Conv2d(in_size, out_size, kernel_size=3, padding=int(padding)))
+        # block.append(nn.Conv2d(in_size, out_size, kernel_size=3, padding=int(padding)))
+        block.append(nn.Conv2d(in_size, out_size, kernel_size=3, padding=2, padding_mode='circular'))
         block.append(nn.ReLU())
         if batch_norm:
             block.append(nn.BatchNorm2d(out_size))
 
-        block.append(nn.Conv2d(out_size, out_size, kernel_size=3, padding=int(padding)))
+        # block.append(nn.Conv2d(out_size, out_size, kernel_size=3, padding=int(padding)))
+        block.append(nn.Conv2d(out_size, out_size, kernel_size=3, padding=2, padding_mode='circular'))
         block.append(nn.ReLU())
         if batch_norm:
             block.append(nn.BatchNorm2d(out_size))
@@ -115,8 +118,8 @@ class UNetUpBlock(nn.Module):
         diff_y = (layer_height - target_size[0]) // 2
         diff_x = (layer_width - target_size[1]) // 2
         return layer[
-            :, :, diff_y : (diff_y + target_size[0]), diff_x : (diff_x + target_size[1])
-        ]
+               :, :, diff_y: (diff_y + target_size[0]), diff_x: (diff_x + target_size[1])
+               ]
 
     def forward(self, x, bridge):
         up = self.up(x)
