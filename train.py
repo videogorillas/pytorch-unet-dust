@@ -168,6 +168,32 @@ lossf = BCELoss()
 
 dilation_kernel = np.ones((3, 3), np.uint8)
 
+
+def falsepositives_mask(prediction, dilated):
+    batch_size = dilated.shape[0]
+    falsepositives = (prediction - dilated)
+    fpmask = (falsepositives > 0)
+    falsepositives = falsepositives * fpmask.float()
+    fpmax = (falsepositives.reshape(batch_size, 256 * 256).max(1).values * 255.0).int()
+    dsum = dilated.reshape(batch_size, 256 * 256).sum(1).int()
+    for n, fp in enumerate(falsepositives):
+        fpmaxn = fpmax[n].item()
+        dsumn = dsum[n].item() / 2
+        dilatedsum = 0
+        for m in range(fpmaxn, -1, -1):
+            fpmaskn = fp > (m / 255.0)
+            fpmasknd = fpmaskn.cpu().squeeze().detach().numpy()
+            fpmasknd = cv2.dilate(fpmasknd, dilation_kernel, iterations=1)
+            dilatedsum = fpmasknd.sum()
+            # print(dilatedsum, dsumn)
+            if dilatedsum >= dsumn:
+                break
+
+        fpmaskn = torch.tensor(fpmasknd, device=device).float()
+        falsepositives[n] = fp * fpmaskn + dilated[n]
+    mask = (dilated + (falsepositives > 0).float()).clamp(0.0, 1.0)
+    return (falsepositives, mask)
+
 for e in range(20):
     for i, batch in enumerate(dataloader):
         img = batch['img'].to(device)
@@ -175,30 +201,7 @@ for e in range(20):
         dilated = batch['dilated'].to(device)
         prediction = model(img)
 
-        batch_size = dilated.shape[0]
-
-        falsepositives = (prediction - dilated)
-        fpmask = (falsepositives > 0)
-        falsepositives = falsepositives * fpmask.float()
-        fpmax = (falsepositives.reshape(batch_size, 256 * 256).max(1).values * 255.0).int()
-        dsum = dilated.reshape(batch_size, 256 * 256).sum(1).int()
-        for n, fp in enumerate(falsepositives):
-            fpmaxn = fpmax[n].item()
-            dsumn = dsum[n].item() / 2
-            dilatedsum = 0
-            for m in range(fpmaxn, -1, -1):
-                fpmaskn = fp > (m / 255.0)
-                fpmasknd = fpmaskn.cpu().squeeze().detach().numpy()
-                fpmasknd = cv2.dilate(fpmasknd, dilation_kernel, iterations=1)
-                dilatedsum = fpmasknd.sum()
-                # print(dilatedsum, dsumn)
-                if dilatedsum >= dsumn:
-                    break
-
-            fpmaskn = torch.tensor(fpmasknd, device=device).float()
-            falsepositives[n] = fp * fpmaskn + dilated[n]
-
-        mask = (dilated + (falsepositives > 0).float()).clamp(0.0, 1.0)
+        falsepositives, mask = falsepositives_mask(prediction, dilated)
 
         ga = prediction * mask.detach()
         loss = lossf(ga, expected)
