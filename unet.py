@@ -81,13 +81,13 @@ class UNetConvBlock(nn.Module):
         super(UNetConvBlock, self).__init__()
         block = []
 
-        block.append(nn.ReflectionPad2d(2))
+        block.append(nn.ReflectionPad2d(1))
         block.append(nn.Conv2d(in_size, out_size, kernel_size=3))
         block.append(nn.ReLU())
         if batch_norm:
             block.append(nn.BatchNorm2d(out_size))
 
-        # block.append(nn.ReflectionPad2d(2))
+        block.append(nn.ReflectionPad2d(1))
         block.append(nn.Conv2d(out_size, out_size, kernel_size=3))
         block.append(nn.ReLU())
         if batch_norm:

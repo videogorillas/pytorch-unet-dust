@@ -14,6 +14,7 @@ from torch.nn import BCELoss, CrossEntropyLoss
 
 from unet import UNet
 
+
 class FilmDust128Dataset(data.Dataset):
     def __init__(self, rootdir):
         self.rootdir = rootdir
@@ -26,7 +27,7 @@ class FilmDust128Dataset(data.Dataset):
         self.okpaths = list(map(lambda k: dp[k], (filter(lambda k: k in dp, da.keys()))))
         self.rnd = Random(42434445)
         self.totensor = transforms.ToTensor()
-        self.dilation_kernel = np.ones((5, 5), np.uint8)
+        self.dilation_kernel = np.ones((3, 3), np.uint8)
 
     def __getitem__(self, index):
         idx = index
@@ -40,13 +41,22 @@ class FilmDust128Dataset(data.Dataset):
         dust = self.totensor(cmask)
         cmasknp = np.array(cmask, dtype=np.float32)
         dilated = cv2.dilate(cmasknp, self.dilation_kernel, iterations=1) / 255.0
-        return {'img': timg, 'mask': dust, 'dilated': self.totensor(dilated)}
+        cmasksum = (cmasknp / 255.0).sum()
+        dilatedsum = dilated.sum()
+        while dilatedsum / cmasksum < 2:
+            dilated = cv2.dilate(dilated, self.dilation_kernel, iterations=1)
+            dilatedsum = dilated.sum()
+
+        dt = self.totensor(dilated)
+        return {'img': timg, 'mask': dust, 'dilated': dt, 'dilated_pixcnt': dt.sum()}
 
     def __len__(self):
         return len(self.okpaths)
 
+
 _W = 128
 _H = 128
+
 
 class FilmDustDataset(data.Dataset):
     def __init__(self, rootdir):
@@ -142,19 +152,21 @@ summary(model, input_size=(3, _W, _H))
 
 optim = torch.optim.Adam(model.parameters())
 
-filmdust = FilmDust128Dataset("/home/zhukov/tmp/ok/256")
+filmdust = FilmDust128Dataset("/home/zhukov/tmp/ok/256.e4d4")
 print(len(filmdust))
 dataloader = torch.utils.data.DataLoader(
     filmdust,
-    batch_size=48,
+    batch_size=42,
     shuffle=True,
     num_workers=8)
 
 # dilate mask
 # tensorboard or visdom
 # lossf = CrossEntropyLoss()
-# ?lossf = BCELoss(reduction='none')
+# lossf = BCELoss(reduction='none')
 lossf = BCELoss()
+
+dilation_kernel = np.ones((3, 3), np.uint8)
 
 for e in range(20):
     for i, batch in enumerate(dataloader):
@@ -163,14 +175,46 @@ for e in range(20):
         dilated = batch['dilated'].to(device)
         prediction = model(img)
 
-        ga = prediction * dilated
+        batch_size = dilated.shape[0]
+
+        falsepositives = (prediction - dilated)
+        fpmask = (falsepositives > 0)
+        falsepositives = falsepositives * fpmask.float()
+        fpmax = (falsepositives.reshape(batch_size, 256 * 256).max(1).values * 255.0).int()
+        dsum = dilated.reshape(batch_size, 256 * 256).sum(1).int()
+        for n, fp in enumerate(falsepositives):
+            fpmaxn = fpmax[n].item()
+            dsumn = dsum[n].item() / 2
+            dilatedsum = 0
+            for m in range(fpmaxn, -1, -1):
+                fpmaskn = fp > (m / 255.0)
+                fpmasknd = fpmaskn.cpu().squeeze().detach().numpy()
+                fpmasknd = cv2.dilate(fpmasknd, dilation_kernel, iterations=1)
+                dilatedsum = fpmasknd.sum()
+                # print(dilatedsum, dsumn)
+                if dilatedsum >= dsumn:
+                    break
+
+            fpmaskn = torch.tensor(fpmasknd, device=device).float()
+            falsepositives[n] = fp * fpmaskn + dilated[n]
+
+        mask = (dilated + (falsepositives > 0).float()).clamp(0.0, 1.0)
+
+        ga = prediction * mask.detach()
         loss = lossf(ga, expected)
+        # https://discuss.pytorch.org/t/per-class-and-per-sample-weighting/25530/4
+        # pixelcnt = batch['dilated_pixcnt'].to(device)
+        # pixelcnt = pixelcnt.reshape((loss.shape[0], 1, 1, 1))
+        # w = (pixelcnt / pixelcnt.sum()).detach()
+        # theloss = (loss * w).mean()
 
         # maskedloss = loss * dilated
         # theloss = torch.sum(maskedloss) / torch.sum(dilated)
 
         print("epoch", e, "iter", i, "loss", loss.item(), "min", int(prediction.min().item() * 255), "max",
               int(prediction.max().item() * 255))
+        # print("epoch", e, "iter", i, "loss", theloss.item(), "min", int(prediction.min().item() * 255), "max",
+        #       int(prediction.max().item() * 255))
         if i % 10 == 0:
             img0 = img[0]
             expected0 = expected[0]
@@ -178,10 +222,12 @@ for e in range(20):
             if not os.path.isdir(edir):
                 os.mkdir(edir)
 
-            save_image(tensor2im(img0), "%s/%03d_img.png" % (edir, i))
-            save_image(tensor2im(torch.stack([expected0[0]], 0)), "%s/%03d_expected.png" % (edir, i))
-            save_image(tensor2im(torch.stack([dilated[0]], 0)), "%s/%03d_dilate.png" % (edir, i))
-            save_image(tensor2im(torch.stack([prediction[0]], 0)), "%s/%03d_pred0.png" % (edir, i))
+            save_image(tensor2im(img0), "%s/%03d_0img.png" % (edir, i))
+            save_image(tensor2im(torch.stack([prediction[0]], 0)), "%s/%03d_1pred.png" % (edir, i))
+            save_image(tensor2im(torch.stack([expected0[0]], 0)), "%s/%03d_2expected.png" % (edir, i))
+            save_image(tensor2im(torch.stack([dilated[0]], 0)), "%s/%03d_2dilate.png" % (edir, i))
+            save_image(tensor2im(torch.stack([mask[0]], 0)), "%s/%03d_3mask.png" % (edir, i))
+            save_image(tensor2im(torch.stack([falsepositives[0]], 0)), "%s/%03d_4falsepositives.png" % (edir, i))
             # save_image(tensor2im(torch.stack([prediction[0][0]], 0)), edir + "/" + str(i) + "_pred0.png")
             # save_image(tensor2im(torch.stack([(prediction[0][1])], 0)), edir + "/" + str(i) + "_pred1.png")
             print(i)
