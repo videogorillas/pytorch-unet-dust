@@ -15,7 +15,7 @@ from torch.nn import BCELoss, CrossEntropyLoss
 from unet import UNet
 
 
-class FilmDust128Dataset(data.Dataset):
+class FilmDustDataset(data.Dataset):
     def __init__(self, rootdir):
         self.rootdir = rootdir
         listdir = os.listdir(rootdir)
@@ -52,59 +52,6 @@ class FilmDust128Dataset(data.Dataset):
 
     def __len__(self):
         return len(self.okpaths)
-
-
-_W = 128
-_H = 128
-
-
-class FilmDustDataset(data.Dataset):
-    def __init__(self, rootdir):
-        self.rootdir = rootdir
-        listdir = os.listdir(rootdir)
-        alphapaths = list(filter(lambda n: n.endswith("_alpha.png"), listdir))
-        paths = list(filter(lambda n: n.endswith(".png") and not n.endswith("_alpha.png"), listdir))
-        da = {i.replace("_alpha.png", ""): i for i in alphapaths}
-        dp = {i.replace(".png", ""): i for i in paths}
-
-        self.okpaths = list(map(lambda k: dp[k], (filter(lambda k: k in dp, da.keys()))))
-        self.rnd = Random(42434445)
-        self.patches_per_image = 8
-
-        self.totensor = transforms.ToTensor()
-        self.dilation_kernel = np.ones((5, 5), np.uint8)
-
-    def __getitem__(self, index):
-        idx = index // self.patches_per_image
-        path = self.okpaths[idx]
-        apath = path.replace(".png", "_alpha.png")
-        # print(path, ":", apath)
-        img = Image.open(os.path.join(self.rootdir, path))
-        mask = Image.open(os.path.join(self.rootdir, apath))
-        w, h = img.size
-
-        x = self.rnd.randint(64, w - 64 - _W)
-        y = self.rnd.randint(64, h - 64 - _H)
-        cimg = img.crop((x, y, x + _W, y + _H))
-        cmask = mask.crop((x, y, x + _W, y + _H))
-
-        # CrossEntropyLoss
-        # dust = self.totensor(cmask).long()
-        # return {'img': self.totensor(cimg), 'mask': dust[0]}
-
-        # BCELoss
-        dust = self.totensor(cmask)
-        cmasknp = np.array(cmask, dtype=np.float32) * 255.0
-        dilated = cv2.dilate(cmasknp, self.dilation_kernel, iterations=1) / 255.0
-        return {'img': self.totensor(cimg), 'mask': dust, 'dilated': self.totensor(dilated)}
-
-        # dust = self.totensor(cmask)
-        # background = torch.abs(dust - 1.0)
-        # return {'img': self.totensor(cimg), 'mask': torch.stack([background[0], dust[0]], 0)}
-
-    def __len__(self):
-        return len(self.okpaths) * self.patches_per_image
-
 
 def tensor2im(input_image, imtype=np.uint8):
     """"Converts a Tensor array into a numpy image array.
@@ -143,16 +90,18 @@ def save_image(image_numpy, image_path):
     image_pil = Image.fromarray(image_numpy)
     image_pil.save(image_path)
 
+_W = 256
+_H = 256
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
-model = UNet(in_channels=3, wf=4, depth=4, n_classes=1, padding=True, up_mode='upconv', batch_norm=True).to(device)
+model = UNet(in_channels=3, wf=3, depth=3, n_classes=1, padding=True, up_mode='upconv', batch_norm=True).to(device)
 print(model)
 summary(model, input_size=(3, _W, _H))
 
 optim = torch.optim.Adam(model.parameters())
 
-filmdust = FilmDust128Dataset("/home/zhukov/tmp/ok/256.e4d4")
+filmdust = FilmDustDataset("/home/zhukov/clients/uk/dustdataset/ok/256.e4d4")
 print(len(filmdust))
 dataloader = torch.utils.data.DataLoader(
     filmdust,
@@ -174,8 +123,8 @@ def falsepositives_mask(prediction, dilated):
     falsepositives = (prediction - dilated)
     fpmask = (falsepositives > 0)
     falsepositives = falsepositives * fpmask.float()
-    fpmax = (falsepositives.reshape(batch_size, 256 * 256).max(1).values * 255.0).int()
-    dsum = dilated.reshape(batch_size, 256 * 256).sum(1).int()
+    fpmax = (falsepositives.reshape(batch_size, _W * _H).max(1).values * 255.0).int()
+    dsum = dilated.reshape(batch_size, _W * _H).sum(1).int()
     for n, fp in enumerate(falsepositives):
         fpmaxn = fpmax[n].item()
         dsumn = dsum[n].item() / 2
