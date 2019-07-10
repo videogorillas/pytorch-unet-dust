@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import torch.utils.data as data
 from torch.nn import BCELoss
-from torchsummary import summary
 
 from dataset import FilmDustDataset
 from unet import UNet
@@ -16,14 +15,14 @@ _H = 256
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
-# model = UNet(in_channels=3, wf=4, depth=4, n_classes=1, padding=True, up_mode='upconv', batch_norm=True).to(device)
 model = UNet(in_channels=3, wf=3, depth=3, n_classes=1, padding=True, up_mode='upconv', batch_norm=True).to(device)
-print(model)
-summary(model, input_size=(3, _W, _H))
+
+model.load_state_dict(torch.load('weights/w3d3/dust_19.pth'), strict=False)
+model.to(device)
 
 optim = torch.optim.Adam(model.parameters())
 
-filmdust = FilmDustDataset("/home/zhukov/clients/uk/dustdataset/ok/256.e4d4")
+filmdust = FilmDustDataset("/home/zhukov/clients/uk/dustdataset/gimar/256.e4d4/finetune")
 print(len(filmdust))
 dataloader = torch.utils.data.DataLoader(
     filmdust,
@@ -49,7 +48,7 @@ def falsepositives_mask(prediction, dilated):
     dsum = dilated.reshape(batch_size, _W * _H).sum(1).int()
     for n, fp in enumerate(falsepositives):
         fpmaxn = fpmax[n].item()
-        dsumn = dsum[n].item() / 2
+        dsumn = dsum[n].item()
         dilatedsum = 0
         for m in range(fpmaxn, -1, -1):
             fpmaskn = fp > (m / 255.0)
@@ -66,7 +65,7 @@ def falsepositives_mask(prediction, dilated):
     return (falsepositives, mask)
 
 
-for e in range(20):
+for e in range(10):
     for i, batch in enumerate(dataloader):
         img = batch['img'].to(device)
         expected = batch['mask'].to(device)
@@ -97,13 +96,12 @@ for e in range(20):
             if not os.path.isdir(edir):
                 os.mkdir(edir)
 
-            k = os.path.basename(batch['path'][0]).replace(".png", "")
             save_image(tensor2im(img0), "%s/%03d_0img.png" % (edir, i))
-            save_image(tensor2im(torch.stack([prediction[0]], 0)), "%s/%03d_1pred_%s.png" % (edir, i, k))
-            save_image(tensor2im(torch.stack([expected0[0]], 0)), "%s/%03d_2expected_%s.png" % (edir, i, k))
-            save_image(tensor2im(torch.stack([dilated[0]], 0)), "%s/%03d_2dilate_%s.png" % (edir, i, k))
-            save_image(tensor2im(torch.stack([mask[0]], 0)), "%s/%03d_3mask_%s.png" % (edir, i, k))
-            save_image(tensor2im(torch.stack([falsepositives[0]], 0)), "%s/%03d_4falsepositives_%s.png" % (edir, i, k))
+            save_image(tensor2im(torch.stack([prediction[0]], 0)), "%s/%03d_1pred.png" % (edir, i))
+            save_image(tensor2im(torch.stack([expected0[0]], 0)), "%s/%03d_2expected.png" % (edir, i))
+            save_image(tensor2im(torch.stack([dilated[0]], 0)), "%s/%03d_2dilate.png" % (edir, i))
+            save_image(tensor2im(torch.stack([mask[0]], 0)), "%s/%03d_3mask.png" % (edir, i))
+            save_image(tensor2im(torch.stack([falsepositives[0]], 0)), "%s/%03d_4falsepositives.png" % (edir, i))
             # save_image(tensor2im(torch.stack([prediction[0][0]], 0)), edir + "/" + str(i) + "_pred0.png")
             # save_image(tensor2im(torch.stack([(prediction[0][1])], 0)), edir + "/" + str(i) + "_pred1.png")
             print(i)
@@ -111,4 +109,4 @@ for e in range(20):
         # theloss.backward()
         loss.backward()
         optim.step()
-    torch.save(model.state_dict(), 'weights/dust_' + str(e) + '.pth')
+    torch.save(model.state_dict(), 'weights/finetune_dust_' + str(e) + '.pth')
