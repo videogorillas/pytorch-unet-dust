@@ -7,7 +7,7 @@ import torch.utils.data as data
 from torch.nn import BCELoss
 from torchsummary import summary
 
-from dataset import FilmDustDataset
+from dataset import FilmDustSeqDataset
 from unet import UNet
 from util import save_image, tensor2im
 
@@ -17,13 +17,14 @@ _H = 256
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 # model = UNet(in_channels=3, wf=4, depth=4, n_classes=1, padding=True, up_mode='upconv', batch_norm=True).to(device)
-model = UNet(in_channels=3, wf=3, depth=3, n_classes=1, padding=True, up_mode='upconv', batch_norm=True).to(device)
+model = UNet(in_channels=9, wf=4, depth=3, n_classes=1, padding=True, up_mode='upconv', batch_norm=True).to(device)
 print(model)
-summary(model, input_size=(3, _W, _H))
+summary(model, input_size=(9, _W, _H))
 
 optim = torch.optim.Adam(model.parameters())
 
-filmdust = FilmDustDataset("/home/zhukov/clients/uk/dustdataset/ok/256.e4d4")
+# filmdust = FilmDustDataset("/home/zhukov/clients/uk/dustdataset/ok/256.e4d4")
+filmdust = FilmDustSeqDataset("/home/zhukov/clients/uk/dustdataset/ok/768x256.e4d4")
 print(len(filmdust))
 dataloader = torch.utils.data.DataLoader(
     filmdust,
@@ -91,7 +92,7 @@ for e in range(20):
         # print("epoch", e, "iter", i, "loss", theloss.item(), "min", int(prediction.min().item() * 255), "max",
         #       int(prediction.max().item() * 255))
         if i % 10 == 0:
-            img0 = img[0]
+            img0 = img[0][0:3]
             expected0 = expected[0]
             edir = 'tmp/' + str(e)
             if not os.path.isdir(edir):
@@ -111,4 +112,4 @@ for e in range(20):
         # theloss.backward()
         loss.backward()
         optim.step()
-    torch.save(model.state_dict(), 'weights/dust_' + str(e) + '.pth')
+    torch.save(model.state_dict(), 'weights/dustseq_' + str(e) + '.pth')
