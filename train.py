@@ -17,13 +17,14 @@ _H = 256
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 # model = UNet(in_channels=3, wf=4, depth=4, n_classes=1, padding=True, up_mode='upconv', batch_norm=True).to(device)
-model = UNet(in_channels=3, wf=3, depth=3, n_classes=1, padding=True, up_mode='upconv', batch_norm=True).to(device)
+model = UNet(in_channels=3, wf=4, depth=4, n_classes=1, padding=True, up_mode='upconv', batch_norm=True).to(device)
 print(model)
 summary(model, input_size=(3, _W, _H))
 
 optim = torch.optim.Adam(model.parameters())
 
-filmdust = FilmDustDataset("/home/zhukov/clients/uk/dustdataset/ok/256.e4d4")
+# filmdust = FilmDustDataset("/home/zhukov/clients/uk/dustdataset/256.16bit")
+filmdust = FilmDustDataset("/home/zhukov/clients/uk/dustdataset/256.8bit")
 print(len(filmdust))
 dataloader = torch.utils.data.DataLoader(
     filmdust,
@@ -111,4 +112,5 @@ for e in range(20):
         # theloss.backward()
         loss.backward()
         optim.step()
-    torch.save(model.state_dict(), 'weights/dust_' + str(e) + '.pth')
+    # torch.save(model.state_dict(), 'weights/dust16_' + str(e) + '.pth')
+    torch.save(model.state_dict(), 'weights/dust8_' + str(e) + '.pth')

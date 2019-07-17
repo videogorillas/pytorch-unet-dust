@@ -1,3 +1,4 @@
+import cv2
 import torch
 import numpy as np
 from PIL import Image
@@ -37,5 +38,16 @@ def save_image(image_numpy, image_path):
         image_numpy (numpy array) -- input numpy array
         image_path (str)          -- the path of the image
     """
-    image_pil = Image.fromarray(image_numpy)
-    image_pil.save(image_path)
+    cv2.imwrite(image_path, image_numpy)
+    # image_pil = Image.fromarray(image_numpy)
+    # image_pil.save(image_path)
+
+
+# reads image in 16bit per channel mode if possible, returns ndarray (h,w,c) normalized to [0.0..1.0]
+def imread16(path: str) -> np.ndarray:
+    flags = cv2.IMREAD_ANYDEPTH | cv2.IMREAD_ANYCOLOR
+    src = cv2.imread(path, flags)
+    assert src.dtype == np.uint16 or src.dtype == np.uint8, "unhandled data type " + str(src.dtype)
+
+    max_val = 65535. if src.dtype == np.uint16 else 255.
+    return src.astype("float32") / max_val

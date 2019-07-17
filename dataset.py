@@ -8,6 +8,8 @@ import os
 
 from PIL import Image
 
+from util import imread16
+
 
 class FilmDustDataset(data.Dataset):
     def __init__(self, rootdir):
@@ -28,7 +30,7 @@ class FilmDustDataset(data.Dataset):
         path = self.okpaths[idx]
         apath = path.replace(".png", "_alpha.png")
         # print(path, ":", apath)
-        cimg = Image.open(os.path.join(self.rootdir, path))
+        cimg = imread16(os.path.join(self.rootdir, path))
         cmask = Image.open(os.path.join(self.rootdir, apath))
 
         timg = self.totensor(cimg)
