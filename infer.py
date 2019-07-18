@@ -24,7 +24,7 @@ model.eval()
 
 totensor = torchvision.transforms.ToTensor()
 
-with torch.no_grad:
+with torch.no_grad():
     for path in cfg.paths:
         print(path)
         basename = os.path.basename(path)
