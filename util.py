@@ -47,7 +47,7 @@ def save_image(image_numpy, image_path):
 def imread16(path: str) -> np.ndarray:
     flags = cv2.IMREAD_ANYDEPTH | cv2.IMREAD_ANYCOLOR
     src = cv2.imread(path, flags)
-    assert src.dtype == np.uint16 or src.dtype == np.uint8, "unhandled data type " + str(src.dtype)
+    assert src.dtype == np.uint16 or src.dtype == np.uint8, "unhandled data type " + str(src.dtype) + " while reading " + path
 
     max_val = 65535. if src.dtype == np.uint16 else 255.
     return src.astype("float32") / max_val
