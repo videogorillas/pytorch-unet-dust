@@ -24,10 +24,11 @@ model.eval()
 
 totensor = torchvision.transforms.ToTensor()
 
-for path in cfg.paths:
-    print(path)
-    basename = os.path.basename(path)
-    img = imread16(path)
-    t = totensor(img).to(device).unsqueeze(0)
-    predicted = model(t).detach()
-    save_image(tensor2im(predicted[0]), cfg.output_dir + "/" + basename)
+with torch.no_grad():
+    for path in cfg.paths:
+        print(path)
+        basename = os.path.basename(path)
+        img = imread16(path)
+        t = totensor(img).to(device).unsqueeze(0)
+        predicted = model(t).detach()
+        save_image(tensor2im(predicted[0]), cfg.output_dir + "/" + basename)
