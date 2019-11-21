@@ -24,7 +24,7 @@ summary(model, input_size=(3, _W, _H))
 optim = torch.optim.Adam(model.parameters())
 
 # filmdust = FilmDustDataset("/home/zhukov/clients/uk/dustdataset/256.16bit")
-filmdust = FilmDustDataset("/home/zhukov/clients/uk/dustdataset/256.8bit")
+filmdust = FilmDustDataset("/storage/datasets/dustdataset/256.8bit")
 print(len(filmdust))
 dataloader = torch.utils.data.DataLoader(
     filmdust,
