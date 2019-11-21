@@ -2,6 +2,7 @@
 `/storage/datasets/dustdataset`
 
 `256.8bit` - 8bit images with ground truth dust + masks
+
 `256.clean` - 8bit image with ground truth no dust
 
 # Film dust and scratch prediction
@@ -15,10 +16,14 @@ Based on modified PyTorch implementation of [U-Net: Convolutional Networks for B
 
 ```bash
 
-python3 infer.py path/to/img.png
+python3 infer.py --weights_path /storage/vg_models/dust_weights/dust8_19.pth path/to/img.png
 
 ```
 
 # Train
 
 `python3 train.py`
+
+# User FAQ
+
+https://docs.google.com/document/d/1o6WuVnAbPbKTusfvqsSjWo1V6poOie9supyFBjyAXgg/edit
